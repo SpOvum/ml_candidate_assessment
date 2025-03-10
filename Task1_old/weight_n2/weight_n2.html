@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>N2 EDA Dashboard</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f8f8f8;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .year-container {
+      margin: 20px auto;
+      max-width: 900px;
+      background: #fefefe;
+      border: 1px solid #ddd;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 10px;
+    }
+    .year-title {
+      text-align: center;
+      font-size: 24px;
+      margin: 10px 0;
+    }
+    .chart-container {
+      margin: 20px auto;
+      background: #fff;
+      padding: 10px 20px;
+      border: 1px solid #ddd;
+      max-width: 900px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chart-title {
+      font-size: 20px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .axis-label {
+      font-size: 12px;
+      fill: #333;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      font-size: 12px;
+      opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>N2 EDA Dashboard</h1>
+  <script>
+    // 1) Define a time parser for "YYYY-MM-DD HH:MM:SS"
+    const parseTime = d3.timeParse("%Y-%m-%d %H:%M:%S");
+
+    // We have a single variable in this dataset: n2
+    const variables = ["n2"];
+
+    // 2) Load the JSON file (update the path as needed)
+    d3.json("../json/weight_n2.json").then(data => {
+      // A) Parse each record
+      data.forEach(d => {
+        d.time_stamp = parseTime(d.time_stamp);
+        d.n2 = +d.n2;
+        // Derive additional fields
+        d.hour = d.time_stamp.getHours();
+        d.weekday = (d.time_stamp.getDay() + 6) % 7; // Monday=0
+        d.month = d.time_stamp.getMonth() + 1;       // 1..12
+        d.day = d.time_stamp.getDate();              // 1..31
+        d.year = d.time_stamp.getFullYear();
+        d.date = d3.timeFormat("%Y-%m-%d")(d.time_stamp);
+      });
+
+      // Get all unique years in the dataset
+      const allYears = [...new Set(data.map(d => d.year))].sort(d3.ascending);
+
+      // Single tooltip for all charts
+      const tooltip = d3.select("body").append("div").attr("class", "tooltip");
+
+      // Helper: median
+      function median(values) {
+        const sorted = values.slice().sort(d3.ascending);
+        const mid = Math.floor(sorted.length / 2);
+        return values.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+      }
+
+      // =====================================================
+      // Chart Functions
+      // =====================================================
+
+      // (A) Hourly Variation Chart
+      function drawHourlyChart(selection, yearData, variable, year) {
+        const grouped = Array.from(
+          d3.group(yearData, d => d.hour),
+          ([hr, vals]) => ({
+            hour: +hr,
+            meanVal: d3.mean(vals, d => d[variable]),
+            medianVal: median(vals.map(d => d[variable]))
+          })
+        ).sort((a, b) => d3.ascending(a.hour, b.hour));
+
+        const container = selection.append("div").attr("class", "chart-container");
+        container.append("div")
+          .attr("class", "chart-title")
+          .text(`Hourly Variation - ${variable.toUpperCase()} - Year ${year}`);
+
+        const svgWidth = 800, svgHeight = 400;
+        const margin = { top: 20, right: 30, bottom: 50, left: 60 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleLinear().domain([0, 23]).range([0, width]);
+        g.append("g")
+          .attr("transform", `translate(0, ${height})`)
+          .call(d3.axisBottom(x).ticks(24))
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 40)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text("Hour");
+
+        const minVal = d3.min(grouped, d => Math.min(d.meanVal, d.medianVal));
+        const maxVal = d3.max(grouped, d => Math.max(d.meanVal, d.medianVal));
+        const y = d3.scaleLinear().domain([minVal, maxVal]).nice().range([height, 0]);
+        g.append("g")
+          .call(d3.axisLeft(y))
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -height / 2)
+          .attr("y", -45)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text(variable.toUpperCase());
+
+        const lineMean = d3.line().x(d => x(d.hour)).y(d => y(d.meanVal));
+        const lineMedian = d3.line().x(d => x(d.hour)).y(d => y(d.medianVal));
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", 2)
+          .attr("d", lineMean);
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "orange")
+          .attr("stroke-width", 2)
+          .attr("d", lineMedian);
+
+        g.selectAll(".mean-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "mean-circle")
+          .attr("cx", d => x(d.hour))
+          .attr("cy", d => y(d.meanVal))
+          .attr("r", 4)
+          .attr("fill", "steelblue")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Hour: ${d.hour}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+        g.selectAll(".median-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "median-circle")
+          .attr("cx", d => x(d.hour))
+          .attr("cy", d => y(d.medianVal))
+          .attr("r", 4)
+          .attr("fill", "orange")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Hour: ${d.hour}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+      }
+
+      // (B) Weekly Variation Chart
+      function drawWeeklyChart(selection, yearData, variable, year) {
+        const grouped = Array.from(
+          d3.group(yearData, d => d.weekday),
+          ([wd, vals]) => ({
+            weekday: +wd,
+            meanVal: d3.mean(vals, d => d[variable]),
+            medianVal: median(vals.map(d => d[variable]))
+          })
+        ).sort((a, b) => d3.ascending(a.weekday, b.weekday));
+
+        const weekdayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+        const container = selection.append("div").attr("class", "chart-container");
+        container.append("div")
+          .attr("class", "chart-title")
+          .text(`Weekly Variation - ${variable.toUpperCase()} - Year ${year}`);
+
+        const svgWidth = 800, svgHeight = 400;
+        const margin = { top: 20, right: 30, bottom: 50, left: 60 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleLinear().domain([0, 6]).range([0, width]);
+        g.append("g")
+          .attr("transform", `translate(0, ${height})`)
+          .call(d3.axisBottom(x).ticks(7).tickFormat(d => weekdayNames[d]))
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 40)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text("Weekday");
+
+        const minVal = d3.min(grouped, d => Math.min(d.meanVal, d.medianVal));
+        const maxVal = d3.max(grouped, d => Math.max(d.meanVal, d.medianVal));
+        const y = d3.scaleLinear().domain([minVal, maxVal]).nice().range([height, 0]);
+        g.append("g")
+          .call(d3.axisLeft(y))
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -height / 2)
+          .attr("y", -45)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text(variable.toUpperCase());
+
+        const lineMean = d3.line().x(d => x(d.weekday)).y(d => y(d.meanVal));
+        const lineMedian = d3.line().x(d => x(d.weekday)).y(d => y(d.medianVal));
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", 2)
+          .attr("d", lineMean);
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "orange")
+          .attr("stroke-width", 2)
+          .attr("d", lineMedian);
+
+        g.selectAll(".mean-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "mean-circle")
+          .attr("cx", d => x(d.weekday))
+          .attr("cy", d => y(d.meanVal))
+          .attr("r", 4)
+          .attr("fill", "steelblue")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Weekday: ${weekdayNames[d.weekday]}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+        g.selectAll(".median-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "median-circle")
+          .attr("cx", d => x(d.weekday))
+          .attr("cy", d => y(d.medianVal))
+          .attr("r", 4)
+          .attr("fill", "orange")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Weekday: ${weekdayNames[d.weekday]}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+      }
+
+      // (C) Monthly Variation Line Chart
+      function drawMonthlyChart(selection, yearData, variable, year) {
+        const grouped = Array.from(
+          d3.group(yearData, d => d.month),
+          ([m, vals]) => ({
+            month: +m,
+            meanVal: d3.mean(vals, d => d[variable]),
+            medianVal: median(vals.map(d => d[variable]))
+          })
+        ).sort((a, b) => d3.ascending(a.month, b.month));
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+        const container = selection.append("div").attr("class", "chart-container");
+        container.append("div")
+          .attr("class", "chart-title")
+          .text(`Monthly Variation - ${variable.toUpperCase()} - Year ${year}`);
+
+        const svgWidth = 800, svgHeight = 400;
+        const margin = { top: 20, right: 30, bottom: 50, left: 60 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const x = d3.scaleLinear().domain([1, 12]).range([0, width]);
+        g.append("g")
+          .attr("transform", `translate(0, ${height})`)
+          .call(d3.axisBottom(x).ticks(12).tickFormat(d => monthNames[d - 1]))
+          .append("text")
+          .attr("x", width / 2)
+          .attr("y", 40)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text("Month");
+
+        const minVal = d3.min(grouped, d => Math.min(d.meanVal, d.medianVal));
+        const maxVal = d3.max(grouped, d => Math.max(d.meanVal, d.medianVal));
+        const y = d3.scaleLinear().domain([minVal, maxVal]).nice().range([height, 0]);
+        g.append("g")
+          .call(d3.axisLeft(y))
+          .append("text")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -height / 2)
+          .attr("y", -45)
+          .attr("fill", "#000")
+          .attr("text-anchor", "middle")
+          .attr("class", "axis-label")
+          .text(variable.toUpperCase());
+
+        const lineMean = d3.line().x(d => x(d.month)).y(d => y(d.meanVal));
+        const lineMedian = d3.line().x(d => x(d.month)).y(d => y(d.medianVal));
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "steelblue")
+          .attr("stroke-width", 2)
+          .attr("d", lineMean);
+
+        g.append("path")
+          .datum(grouped)
+          .attr("fill", "none")
+          .attr("stroke", "orange")
+          .attr("stroke-width", 2)
+          .attr("d", lineMedian);
+
+        g.selectAll(".mean-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "mean-circle")
+          .attr("cx", d => x(d.month))
+          .attr("cy", d => y(d.meanVal))
+          .attr("r", 4)
+          .attr("fill", "steelblue")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Month: ${monthNames[d.month - 1]}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+
+        g.selectAll(".median-circle")
+          .data(grouped)
+          .enter().append("circle")
+          .attr("class", "median-circle")
+          .attr("cx", d => x(d.month))
+          .attr("cy", d => y(d.medianVal))
+          .attr("r", 4)
+          .attr("fill", "orange")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Month: ${monthNames[d.month - 1]}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+      }
+
+      // (D) Daily Entry Counts (Bar Chart)
+      function drawDailyBarChart(selection, yearData, year) {
+        const entryCounts = Array.from(
+          d3.rollup(yearData, v => v.length, d => d.date),
+          ([date, count]) => ({ date: new Date(date), count })
+        ).sort((a, b) => d3.ascending(a.date, b.date));
+
+        const container = selection.append("div").attr("class", "chart-container");
+        container.append("div")
+          .attr("class", "chart-title")
+          .text(`Daily Entry Counts - Year ${year}`);
+
+        const svgWidth = 900, svgHeight = 500;
+        const margin = { top: 20, right: 30, bottom: 50, left: 60 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const xDomain = entryCounts.map(d => d3.timeFormat("%Y-%m-%d")(d.date));
+        const x = d3.scaleBand().domain(xDomain).range([0, width]).padding(0.1);
+        const tickValues = xDomain.filter((_, i) => i % 7 === 0);
+        const xAxis = d3.axisBottom(x).tickValues(tickValues);
+        g.append("g")
+          .attr("transform", `translate(0, ${height})`)
+          .call(xAxis)
+          .selectAll("text")
+          .attr("transform", "rotate(-45)")
+          .style("text-anchor", "end");
+
+        const y = d3.scaleLinear().domain([0, d3.max(entryCounts, d => d.count)]).nice().range([height, 0]);
+        g.append("g").call(d3.axisLeft(y));
+
+        g.selectAll(".bar")
+          .data(entryCounts)
+          .enter().append("rect")
+          .attr("class", "bar")
+          .attr("x", d => x(d3.timeFormat("%Y-%m-%d")(d.date)))
+          .attr("y", d => y(d.count))
+          .attr("width", x.bandwidth())
+          .attr("height", d => height - y(d.count))
+          .attr("fill", "teal")
+          .on("mouseover", (event, d) => {
+            tooltip.transition().duration(200).style("opacity", 0.9);
+            tooltip.html(`Date: ${d3.timeFormat("%Y-%m-%d")(d.date)}<br>Count: ${d.count}`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(500).style("opacity", 0));
+      }
+
+      // (E) Calendar Heatmap (with Legend)
+      function drawCalendarHeatmap(selection, yearData, variable, year) {
+        const grouped = d3.rollups(
+          yearData,
+          v => d3.mean(v, d => d[variable]),
+          d => d.month,
+          d => d.day
+        );
+        let calData = [];
+        grouped.forEach(([m, dayArray]) => {
+          dayArray.forEach(([day, val]) => {
+            calData.push({ month: m, day: day, value: val });
+          });
+        });
+
+        const container = selection.append("div").attr("class", "chart-container");
+        container.append("div")
+          .attr("class", "chart-title")
+          .text(`${variable.toUpperCase()} Calendar Heatmap - Year ${year}`);
+
+        const svgWidth = 800, svgHeight = 400;
+        const margin = { top: 50, right: 70, bottom: 20, left: 60 };
+        const width = svgWidth - margin.left - margin.right;
+        const height = svgHeight - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("width", svgWidth).attr("height", svgHeight);
+        const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+        const months = d3.range(1, 13);
+        const days = d3.range(1, 32);
+        const cellWidth = width / 31;
+        const cellHeight = height / 12;
+        const calValues = calData.map(d => d.value).filter(v => !isNaN(v));
+        const [minVal, maxVal] = d3.extent(calValues);
+        const colorScale = d3.scaleSequential(d3.interpolateViridis).domain([minVal, maxVal]);
+        const lookup = {};
+        calData.forEach(d => { lookup[`${d.month}-${d.day}`] = d.value; });
+
+        months.forEach((m, rowIndex) => {
+          days.forEach(day => {
+            const key = `${m}-${day}`;
+            const val = lookup[key];
+            g.append("rect")
+              .attr("x", (day - 1) * cellWidth)
+              .attr("y", rowIndex * cellHeight)
+              .attr("width", cellWidth)
+              .attr("height", cellHeight)
+              .attr("fill", val !== undefined ? colorScale(val) : "#eee")
+              .attr("stroke", "#fff")
+              .attr("stroke-width", 1)
+              .on("mouseover", (event) => {
+                if (val !== undefined) {
+                  tooltip.transition().duration(200).style("opacity", 0.9);
+                  tooltip.html(`
+                    <strong>${variable.toUpperCase()}</strong><br>
+                    Year: ${year}<br>
+                    Month-Day: ${m}-${day}<br>
+                    Value: ${val.toFixed(2)}
+                  `)
+                  .style("left", (event.pageX + 10) + "px")
+                  .style("top", (event.pageY - 28) + "px");
+                }
+              })
+              .on("mouseout", () => {
+                tooltip.transition().duration(500).style("opacity", 0);
+              });
+          });
+        });
+
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        months.forEach((m, i) => {
+          g.append("text")
+            .attr("x", -10)
+            .attr("y", i * cellHeight + cellHeight / 2)
+            .attr("dy", ".35em")
+            .attr("text-anchor", "end")
+            .style("font-size", "10px")
+            .text(monthNames[m - 1]);
+        });
+
+        const legendHeight = 150;
+        const legendWidth = 10;
+        const legendX = width + 10;
+        const legendY = (height - legendHeight) / 2;
+        const legendScale = d3.scaleLinear().domain(colorScale.domain()).range([legendHeight, 0]);
+        const legendAxis = d3.axisRight(legendScale).ticks(5);
+        const legendG = g.append("g").attr("transform", `translate(${legendX},${legendY})`);
+        const legendData = d3.range(legendHeight);
+        legendG.selectAll(".legend-rect")
+          .data(legendData)
+          .enter().append("rect")
+          .attr("class", "legend-rect")
+          .attr("x", 0)
+          .attr("y", d => d)
+          .attr("width", legendWidth)
+          .attr("height", 1)
+          .attr("fill", d => {
+            const t = 1 - d / legendHeight;
+            const val = legendScale.invert(t * legendHeight);
+            return colorScale(val);
+          });
+        legendG.append("g")
+          .attr("transform", `translate(${legendWidth},0)`)
+          .call(legendAxis);
+        legendG.append("text")
+          .attr("x", legendWidth / 2)
+          .attr("y", -10)
+          .attr("text-anchor", "middle")
+          .text(variable.toUpperCase());
+      }
+
+      // =====================================================
+      // Final Execution Order:
+      // For each unique year, for each variable, draw:
+      // 1) Hourly Variation Chart
+      // 2) Weekly Variation Chart
+      // 3) Monthly Variation Chart
+      // Then, for each year, draw:
+      // 4) Daily Entry Counts (Bar Chart)
+      // 5) Calendar Heatmap
+      // =====================================================
+
+      allYears.forEach(year => {
+        const yearData = data.filter(d => d.year === year);
+        if (yearData.length) {
+          // Create a container for ALL charts for this year
+          const yearContainer = d3.select("body")
+            .append("div")
+            .attr("class", "year-container");
+
+          yearContainer.append("h2")
+            .attr("class", "year-title")
+            .text(`Charts for Year ${year}`);
+
+          variables.forEach(variable => {
+            drawHourlyChart(yearContainer, yearData, variable, year);
+            drawWeeklyChart(yearContainer, yearData, variable, year);
+            drawMonthlyChart(yearContainer, yearData, variable, year);
+          });
+
+          drawDailyBarChart(yearContainer, yearData, year);
+
+          variables.forEach(variable => {
+            drawCalendarHeatmap(yearContainer, yearData, variable, year);
+          });
+        }
+      });
+    });
+  </script> 
+</body>
+</html>
