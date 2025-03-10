@@ -4,7 +4,7 @@ from influxdb import InfluxDBClient
 
 def generate_and_send_data():
     client = InfluxDBClient(host='localhost', port=8086)
-    client.switch_database('mydatabase')  # Replace with your DB name
+    client.switch_database('mydatabase') # Replace name of the database with the database you are gonna use
 
     while True:
         temperature = random.uniform(20, 30)

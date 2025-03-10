@@ -1,4 +1,4 @@
-// Keep track of which dashboards we've loaded so we only load once
+// Tracking which dashboard is loaded so that multiple dashboards are not loaded multiple times
 const loadedDashboards = {
   room1: false,
   room2: false,
@@ -8,28 +8,25 @@ const loadedDashboards = {
   weight_n2: false
 };
 
-// Show/Hide Dashboard Sections
 function showDashboard(sectionId) {
-  // Hide all .dashboard-section
   document.querySelectorAll('.dashboard-section').forEach(sec => {
     sec.style.display = 'none';
   });
-  // Show the chosen section
+  
   document.getElementById(sectionId).style.display = 'block';
 
-  // If not yet loaded, load the data/charts for that section
   if (!loadedDashboards[sectionId]) {
-    loadedDashboards[sectionId] = true; // mark as loaded
+    loadedDashboards[sectionId] = true; 
     loadAndRenderAll(sectionId);
   }
 }
 
-// On page load, show the first one by default
+// Shows room1 dashboard by default
 window.onload = () => {
   showDashboard('room1');
 };
 
-// Global tooltip and helper functions for tooltip
+// Tooltip
 const tooltip = d3.select("#globalTooltip");
 
 function showTooltip(event, content) {
@@ -42,8 +39,6 @@ function showTooltip(event, content) {
 function hideTooltip() {
   tooltip.transition().duration(500).style("opacity", 0);
 }
-
-// Helper Functions
 
 // median
 function median(values) {
@@ -65,7 +60,63 @@ function pearsonCorrelation(x, y) {
   return numerator / denominator;
 }
 
-// (1) Hourly Variation
+//function to draw lines and circles for mean and median
+function drawLinesAndCircles(g, data, xScale, yScale, xAccessor, meanAccessor, medianAccessor, xLabel, variable) {
+ 
+  const lineMean = d3.line()
+    .x(d => xScale(xAccessor(d)))
+    .y(d => yScale(meanAccessor(d)));
+    
+  const lineMedian = d3.line()
+    .x(d => xScale(xAccessor(d)))
+    .y(d => yScale(medianAccessor(d)));
+    
+  // mean line
+  g.append("path")
+    .datum(data)
+    .attr("fill", "none")
+    .attr("stroke", "steelblue")
+    .attr("stroke-width", 2)
+    .attr("d", lineMean);
+    
+  // median line
+  g.append("path")
+    .datum(data)
+    .attr("fill", "none")
+    .attr("stroke", "orange")
+    .attr("stroke-width", 2)
+    .attr("d", lineMedian);
+    
+  // mean circles
+  g.selectAll(".mean-circle")
+    .data(data)
+    .enter().append("circle")
+    .attr("class", "mean-circle")
+    .attr("cx", d => xScale(xAccessor(d)))
+    .attr("cy", d => yScale(meanAccessor(d)))
+    .attr("r", 4)
+    .attr("fill", "steelblue")
+    .on("mouseover", (event, d) => {
+      showTooltip(event, `${xLabel}: ${xAccessor(d)}<br>Mean ${variable.toUpperCase()}: ${meanAccessor(d).toFixed(2)}`);
+    })
+    .on("mouseout", hideTooltip);
+    
+  // median circles
+  g.selectAll(".median-circle")
+    .data(data)
+    .enter().append("circle")
+    .attr("class", "median-circle")
+    .attr("cx", d => xScale(xAccessor(d)))
+    .attr("cy", d => yScale(medianAccessor(d)))
+    .attr("r", 4)
+    .attr("fill", "orange")
+    .on("mouseover", (event, d) => {
+      showTooltip(event, `${xLabel}: ${xAccessor(d)}<br>Median ${variable.toUpperCase()}: ${medianAccessor(d).toFixed(2)}`);
+    })
+    .on("mouseout", hideTooltip);
+}
+
+// hourly variation
 function drawHourlyChart(containerSelector, yearData, variable, year) {
   const grouped = Array.from(
     d3.group(yearData, d => d.hour),
@@ -96,7 +147,6 @@ function drawHourlyChart(containerSelector, yearData, variable, year) {
   const g = svg.append("g")
     .attr("transform", `translate(${margin.left},${margin.top})`);
 
-  // X scale (hour 0..23)
   const x = d3.scaleLinear()
     .domain([0, 23])
     .range([0, width]);
@@ -128,60 +178,10 @@ function drawHourlyChart(containerSelector, yearData, variable, year) {
     .attr("class", "axis-label")
     .text(variable.toUpperCase());
 
-  const lineMean = d3.line()
-    .x(d => x(d.hour))
-    .y(d => y(d.meanVal));
-
-  const lineMedian = d3.line()
-    .x(d => x(d.hour))
-    .y(d => y(d.medianVal));
-
-  // Mean line
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "steelblue")
-    .attr("stroke-width", 2)
-    .attr("d", lineMean);
-
-  // Median line
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "orange")
-    .attr("stroke-width", 2)
-    .attr("d", lineMedian);
-
-  // Mean circles
-  g.selectAll(".mean-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "mean-circle")
-    .attr("cx", d => x(d.hour))
-    .attr("cy", d => y(d.meanVal))
-    .attr("r", 4)
-    .attr("fill", "steelblue")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Hour: ${d.hour}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
-
-  // Median circles
-  g.selectAll(".median-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "median-circle")
-    .attr("cx", d => x(d.hour))
-    .attr("cy", d => y(d.medianVal))
-    .attr("r", 4)
-    .attr("fill", "orange")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Hour: ${d.hour}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
+  drawLinesAndCircles(g, grouped, x, y, d => d.hour, d => d.meanVal, d => d.medianVal, "Hour", variable);
 }
 
-// (2) Weekly Variation
+// weekly variation
 function drawWeeklyChart(containerSelector, yearData, variable, year) {
   const grouped = Array.from(
     d3.group(yearData, d => d.weekday),
@@ -245,59 +245,10 @@ function drawWeeklyChart(containerSelector, yearData, variable, year) {
     .attr("class", "axis-label")
     .text(variable.toUpperCase());
 
-  const lineMean = d3.line()
-    .x(d => x(d.weekday))
-    .y(d => y(d.meanVal));
-  const lineMedian = d3.line()
-    .x(d => x(d.weekday))
-    .y(d => y(d.medianVal));
-
-  // Mean line
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "steelblue")
-    .attr("stroke-width", 2)
-    .attr("d", lineMean);
-
-  // Median line
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "orange")
-    .attr("stroke-width", 2)
-    .attr("d", lineMedian);
-
-  // Mean circles
-  g.selectAll(".mean-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "mean-circle")
-    .attr("cx", d => x(d.weekday))
-    .attr("cy", d => y(d.meanVal))
-    .attr("r", 4)
-    .attr("fill", "steelblue")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Weekday: ${weekdayNames[d.weekday]}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
-
-  // Median circles
-  g.selectAll(".median-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "median-circle")
-    .attr("cx", d => x(d.weekday))
-    .attr("cy", d => y(d.medianVal))
-    .attr("r", 4)
-    .attr("fill", "orange")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Weekday: ${weekdayNames[d.weekday]}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
+  drawLinesAndCircles(g, grouped, x, y, d => d.weekday, d => d.meanVal, d => d.medianVal, "Weekday", variable);
 }
 
-// (3) Monthly Variation
+// monthly variation
 function drawMonthlyChart(containerSelector, yearData, variable, year) {
   const grouped = Array.from(
     d3.group(yearData, d => d.month),
@@ -362,57 +313,10 @@ function drawMonthlyChart(containerSelector, yearData, variable, year) {
     .attr("class", "axis-label")
     .text(variable.toUpperCase());
 
-  const lineMean = d3.line()
-    .x(d => x(d.month))
-    .y(d => y(d.meanVal));
-  const lineMedian = d3.line()
-    .x(d => x(d.month))
-    .y(d => y(d.medianVal));
-
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "steelblue")
-    .attr("stroke-width", 2)
-    .attr("d", lineMean);
-
-  g.append("path")
-    .datum(grouped)
-    .attr("fill", "none")
-    .attr("stroke", "orange")
-    .attr("stroke-width", 2)
-    .attr("d", lineMedian);
-
-  // Mean circles
-  g.selectAll(".mean-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "mean-circle")
-    .attr("cx", d => x(d.month))
-    .attr("cy", d => y(d.meanVal))
-    .attr("r", 4)
-    .attr("fill", "steelblue")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Month: ${monthNames[d.month - 1]}<br>Mean ${variable.toUpperCase()}: ${d.meanVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
-
-  // Median circles
-  g.selectAll(".median-circle")
-    .data(grouped)
-    .enter().append("circle")
-    .attr("class", "median-circle")
-    .attr("cx", d => x(d.month))
-    .attr("cy", d => y(d.medianVal))
-    .attr("r", 4)
-    .attr("fill", "orange")
-    .on("mouseover", (event, d) => {
-      showTooltip(event, `Month: ${monthNames[d.month - 1]}<br>Median ${variable.toUpperCase()}: ${d.medianVal.toFixed(2)}`);
-    })
-    .on("mouseout", hideTooltip);
+  drawLinesAndCircles(g, grouped, x, y, d => d.month, d => d.meanVal, d => d.medianVal, "Month", variable);
 }
 
-// (4) Correlation Heatmap (All Years Combined)
+// correlation heatmap
 function drawCorrelationHeatmap(containerSelector, allData, variables) {
   const corrData = [];
   variables.forEach(v1 => {
@@ -534,12 +438,11 @@ function drawCorrelationHeatmap(containerSelector, allData, variables) {
     .text("Correlation");
 }
 
-// (5) Daily # of Entries (Bar Chart)
+// Daily no of entries (Bar Chart)
 function drawDailyBarChart(containerSelector, yearData, variable, year) {
-  // If you want to count only rows that have a valid value for this variable:
   const filteredYearData = yearData.filter(d => !isNaN(d[variable]));
 
-  // Now group by day (d.date) to get the daily count
+  // d.date is for daily counts
   const entryCounts = Array.from(
     d3.rollup(filteredYearData, v => v.length, d => d.date),
     ([date, count]) => ({ date: new Date(date), count })
@@ -571,7 +474,7 @@ function drawDailyBarChart(containerSelector, yearData, variable, year) {
     .range([0, width])
     .padding(0.1);
 
-  // Show fewer x‐axis ticks by filtering
+  // Show fewer x‐axis ticks to avoid cluttering
   const tickValues = xDomain.filter((_, i) => i % 7 === 0);
   const xAxis = d3.axisBottom(x).tickValues(tickValues);
 
@@ -603,9 +506,8 @@ function drawDailyBarChart(containerSelector, yearData, variable, year) {
     .on("mouseout", hideTooltip);
 }
 
-// (6) Calendar Heatmap
+// calendar heatmap
 function drawCalendarHeatmap(containerSelector, yearData, variable, year) {
-  // Group by (month, day) => average
   const grouped = d3.rollups(
     yearData,
     v => d3.mean(v, d => d[variable]),
@@ -676,7 +578,7 @@ function drawCalendarHeatmap(containerSelector, yearData, variable, year) {
     });
   });
 
-  // Month labels
+  // month labels
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   months.forEach((m, i) => {
@@ -730,7 +632,7 @@ function drawCalendarHeatmap(containerSelector, yearData, variable, year) {
     .text(variable.toUpperCase());
 }
 
-// Master function: load and render all charts for a dataset (section)
+// Main function to load data and also to select which variables
 function loadAndRenderAll(sectionId) {
   // Decide data file & variables for each section
   let dataUrl = "";
@@ -764,10 +666,10 @@ function loadAndRenderAll(sectionId) {
       return;
   }
 
-  // Attempt to parse times in known formats
+  // Data parsing ,the given data has two different date formats
   const parseTimeList = [
-    d3.timeParse("%Y-%m-%d %H:%M:%S"), // e.g. "2023-05-12 13:26:00"
-    d3.timeParse("%d/%m/%y %H:%M")      // e.g. "28/09/22 13:26"
+    d3.timeParse("%Y-%m-%d %H:%M:%S"), 
+    d3.timeParse("%d/%m/%y %H:%M")      
   ];
 
   function parseTimeStamp(str) {
@@ -780,50 +682,36 @@ function loadAndRenderAll(sectionId) {
 
   // Load JSON data
   d3.json(dataUrl).then(data => {
-    // Parse each record
     data.forEach(d => {
       const parsedDate = parseTimeStamp(d.time_stamp);
       d.time_stamp = parsedDate;
-      // Convert numeric variables
       variables.forEach(v => {
         d[v] = +d[v];
       });
       d.hour = d.time_stamp.getHours();
-      d.weekday = (d.time_stamp.getDay() + 6) % 7; // Monday=0
+      d.weekday = (d.time_stamp.getDay() + 6) % 7;
       d.month = d.time_stamp.getMonth() + 1;
       d.day = d.time_stamp.getDate();
       d.year = d.time_stamp.getFullYear();
       d.date = d3.timeFormat("%Y-%m-%d")(d.time_stamp);
     });
-
-    // Unique years
+    // Get years and sorting them in ascending order
     const allYears = [...new Set(data.map(d => d.year))].sort(d3.ascending);
 
-    // 1) For each YEAR: Hourly, Weekly, Monthly for each variable
+    // For each year, draw hourly, weekly, and monthly variation charts for each variable
     allYears.forEach(year => {
-      // Hourly Variation
       variables.forEach(variable => {
         const yearData = data.filter(r => r.year === year);
         drawHourlyChart(`#${sectionId}`, yearData, variable, year);
-      });
-
-      // Weekly Variation
-      variables.forEach(variable => {
-        const yearData = data.filter(r => r.year === year);
         drawWeeklyChart(`#${sectionId}`, yearData, variable, year);
-      });
-
-      // Monthly Variation
-      variables.forEach(variable => {
-        const yearData = data.filter(r => r.year === year);
         drawMonthlyChart(`#${sectionId}`, yearData, variable, year);
       });
     });
 
-    // 2) Correlation Heatmap (all years combined)
+    // Draw Correlation Heatmap for all data
     drawCorrelationHeatmap(`#${sectionId}`, data, variables);
 
-    // 3) For each variable => for each year => Daily # of entries
+    // Draw Daily Entry Counts
     variables.forEach(variable => {
       allYears.forEach(year => {
         const yearData = data.filter(r => r.year === year);
@@ -831,7 +719,7 @@ function loadAndRenderAll(sectionId) {
       });
     });
 
-    // 4) For each variable => for each year => Calendar Heatmap
+    // Draw Calendar Heatmap
     variables.forEach(variable => {
       allYears.forEach(year => {
         const yearData = data.filter(r => r.year === year);

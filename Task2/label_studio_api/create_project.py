@@ -20,11 +20,9 @@ def create_project():
     )
     print(f"Project created with ID: {project.id}")
     return project.id
-
+#The new project we create the id of that project gets stored in the txt file for later use
 if __name__ == "__main__":
     project_id = create_project()
-
-    # Get the absolute path to the folder containing this script
     script_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(script_dir, "project_id.txt")
 

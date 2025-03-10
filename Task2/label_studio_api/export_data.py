@@ -13,7 +13,7 @@ def export_data(project_id):
     return exported
 
 if __name__ == "__main__":
-    # Always read project_id.txt from the same folder as this script
+    # Reads the project_id.txt which has the latest project id 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     file_path = os.path.join(script_dir, "project_id.txt")
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     data = export_data(project_id)
 
-    # Optionally save the data to a JSON file in the same folder
+    # Saves the data to json file
     exported_file_path = os.path.join(script_dir, "exported_data.json")
     with open(exported_file_path, "w") as f:
         json.dump(data, f, indent=2)
