@@ -1,0 +1,78 @@
+/* Basic Page Layout */
+body {
+    font-family: Arial, sans-serif;
+    background: #f8f8f8;
+    margin: 0;
+    padding: 0;
+  }
+  h1 {
+    text-align: center;
+    margin: 20px 0 10px 0;
+  }
+  
+  /* Navigation Bar */
+  nav {
+    background: #f0f0f0;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #ccc;
+    margin-bottom: 20px;
+  }
+  nav a {
+    text-decoration: none;
+    color: #333;
+    font-weight: bold;
+    margin: 0 15px;
+    cursor: pointer;
+  }
+  nav a:hover {
+    text-decoration: underline;
+  }
+  
+  /* Dashboard Sections */
+  .dashboard-section {
+    display: none; /* hidden by default */
+    margin: 0 auto 40px auto;
+    max-width: 1000px;
+    padding: 0 20px;
+  }
+  .dashboard-section h2 {
+    margin-top: 0;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+  }
+  
+  /* Chart Container Styles */
+  .chart-container {
+    margin: 20px auto;
+    background: #fff;
+    padding: 10px 20px;
+    border: 1px solid #ddd;
+    max-width: 900px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .chart-title {
+    font-size: 20px;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  
+  /* Axis Labels */
+  .axis-label {
+    font-size: 12px;
+    fill: #333;
+  }
+  
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 5px;
+    font-size: 12px;
+    opacity: 0;
+  }
+  

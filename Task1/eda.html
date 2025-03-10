@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EDA Dashboards</title>
+  <!-- D3.js (v6) -->
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+
+  <!-- Link to external CSS file -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>EDA Dashboards</h1>
+
+  <!-- Navigation Bar -->
+  <nav>
+    <a onclick="showDashboard('room1')">Room 1</a>
+    <a onclick="showDashboard('room2')">Room 2</a>
+    <a onclick="showDashboard('freezer')">Freezer</a>
+    <a onclick="showDashboard('incubator')">Incubator</a>
+    <a onclick="showDashboard('planer')">Planer</a>
+    <a onclick="showDashboard('weight_n2')">Weight N2</a>
+  </nav>
+
+  <!-- Dashboard Sections -->
+  <div id="room1" class="dashboard-section">
+    <h2>Mane Room 1 Dashboard</h2>
+  </div>
+  <div id="room2" class="dashboard-section">
+    <h2>Mane Room 2 Dashboard</h2>
+  </div>
+  <div id="freezer" class="dashboard-section">
+    <h2>Freezer Dashboard</h2>
+  </div>
+  <div id="incubator" class="dashboard-section">
+    <h2>Incubator Dashboard</h2>
+  </div>
+  <div id="planer" class="dashboard-section">
+    <h2>Planer Dashboard</h2>
+  </div>
+  <div id="weight_n2" class="dashboard-section">
+    <h2>Weight N2 Dashboard</h2>
+  </div>
+
+  <!-- Single Tooltip for All Charts -->
+  <div class="tooltip" id="globalTooltip"></div>
+
+  <!-- Load the main JS code -->
+  <script src="charts.js"></script>
+</body>
+</html>
